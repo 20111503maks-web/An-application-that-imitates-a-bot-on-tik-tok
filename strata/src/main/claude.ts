@@ -12,6 +12,7 @@ import type {
 import { ChangeTracker, EDIT_TOOLS } from './changes'
 import { childEnv, crossSpawn, killTree } from './exec'
 import { assertAllowed, isInside } from './paths'
+import { writeMcpConfig } from './mcp'
 import { claudePath } from './tools'
 
 const IDLE_SHUTDOWN_MS = 20 * 60 * 1000
@@ -47,6 +48,12 @@ function ruleMatches(rules: string[], toolName: string, input: Record<string, un
   })
 }
 
+function contextWindowOf(modelUsage: unknown): number | undefined {
+  if (!modelUsage || typeof modelUsage !== 'object') return undefined
+  const sizes = Object.values(modelUsage as Record<string, any>).map((m) => Number(m?.contextWindow)).filter((n) => n > 0)
+  return sizes.length ? Math.min(...sizes) : undefined
+}
+
 function contentToText(content: unknown): string {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
@@ -76,6 +83,7 @@ class ClaudeSession {
   private toolNames = new Map<string, { name: string; input: Record<string, unknown> }>()
   private turnChanged = new Set<string>()
   private allowedRules: string[] = []
+  private disabledMcp: string[] = []
   private permissionMode: PermissionMode = 'acceptEdits'
   private queue: string[] = []
   private spawnedAt = 0
@@ -110,10 +118,11 @@ class ClaudeSession {
     const mode = opts.permissionMode ?? 'acceptEdits'
     const model = opts.model ?? ''
     const effort = opts.effort ?? ''
+    this.disabledMcp = [...(opts.disabledMcp ?? [])].sort()
     this.allowedRules = [...(opts.allowedTools ?? [])]
     this.permissionMode = mode
     // Process-level options. If they change, restart the CLI and resume the session.
-    const config = JSON.stringify({ mode: mode === 'plan' || mode === 'bypassPermissions' ? mode : 'host', model, effort, rules: this.allowedRules })
+    const config = JSON.stringify({ mode: mode === 'plan' || mode === 'bypassPermissions' ? mode : 'host', model, effort, mcp: this.disabledMcp, rules: this.allowedRules })
     if (opts.sessionId && opts.sessionId !== this.sessionId) {
       this.shutdown()
       this.sessionId = opts.sessionId
@@ -161,6 +170,8 @@ class ClaudeSession {
     args.push('--disallowedTools', 'AskUserQuestion')
     if (model) args.push('--model', model)
     if (effort) args.push('--effort', effort)
+    const mcpFile = writeMcpConfig(this.projectId, this.cwd, this.disabledMcp)
+    if (mcpFile) args.push('--strict-mcp-config', '--mcp-config', mcpFile)
     if (mode === 'plan') args.push('--permission-mode', 'plan')
     if (mode === 'bypassPermissions') args.push('--dangerously-skip-permissions')
     if (this.sessionId) args.push('--resume', this.sessionId)
@@ -245,7 +256,8 @@ class ClaudeSession {
             this.sessionId = msg.session_id
             this.hooks.onSessionId(this.projectId, msg.session_id)
           }
-          this.emit({ kind: 'session', sessionId: msg.session_id, model: msg.model, cwd: msg.cwd, tools: msg.tools })
+          const mcp = Array.isArray(msg.mcp_servers) ? msg.mcp_servers.map((s: any) => ({ name: String(s.name), status: String(s.status) })) : undefined
+          this.emit({ kind: 'session', sessionId: msg.session_id, model: msg.model, cwd: msg.cwd, tools: msg.tools, mcp })
           this.emit({ kind: 'status', state: 'busy' })
         } else if (msg.subtype === 'task_summary' && typeof msg.detail === 'string') {
           this.emit({ kind: 'summary', text: msg.detail })
@@ -265,6 +277,12 @@ class ClaudeSession {
       case 'assistant': {
         const message = msg.message ?? {}
         const content: any[] = Array.isArray(message.content) ? message.content : []
+        // Prompt size of the latest main-thread request = how full the context is right now.
+        const u = message.usage
+        if (!sub && u && typeof u.input_tokens === 'number') {
+          const tokens = u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
+          if (tokens > 0) this.emit({ kind: 'usage', contextTokens: tokens })
+        }
         content.forEach((block, i) => {
           if (block.type === 'tool_use') {
             const input = (block.input ?? {}) as Record<string, unknown>
@@ -323,6 +341,7 @@ class ClaudeSession {
           costUsd: msg.total_cost_usd,
           durationMs: msg.duration_ms,
           numTurns: msg.num_turns,
+          contextWindow: contextWindowOf(msg.modelUsage),
           error: isError ? text || (Array.isArray(msg.errors) ? msg.errors.join('\n') : msg.subtype) : undefined,
           denials,
           changedFiles: [...this.turnChanged]

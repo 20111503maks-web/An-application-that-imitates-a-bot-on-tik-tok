@@ -1,5 +1,6 @@
 import type {
   ClaudeEventEnvelope,
+  McpServerInfo,
   ClaudeLogLine,
   DirEntry,
   FileContent,
@@ -47,6 +48,7 @@ export interface StrataAPI {
     update(id: string, patch: Partial<Project>): Promise<Project | null>
     touch(id: string): Promise<void>
     info(path: string): Promise<ProjectInfo>
+    mcpServers(path: string): Promise<McpServerInfo[]>
   }
 
   tools: {

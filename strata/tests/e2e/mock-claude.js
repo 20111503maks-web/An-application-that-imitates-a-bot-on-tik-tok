@@ -25,6 +25,18 @@ if (!args.includes('-p')) {
 const resumeIdx = args.indexOf('--resume')
 const sessionId = resumeIdx >= 0 ? args[resumeIdx + 1] : crypto.randomUUID()
 const cwd = process.cwd()
+// MCP servers: --strict-mcp-config limits them to the given file, otherwise the project's .mcp.json is used.
+function mcpServers() {
+  try {
+    const i = args.indexOf('--mcp-config')
+    const file = args.includes('--strict-mcp-config') && i >= 0 ? args[i + 1] : path.join(cwd, '.mcp.json')
+    return Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers || {}).map((name) => ({ name, status: 'connected' }))
+  } catch {
+    return []
+  }
+}
+// Pretend the conversation grows by 70K tokens per message (window: 200K).
+let contextTokens = 0
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n')
 const pending = new Map()
 let interrupted = false
@@ -41,7 +53,8 @@ function say(text) {
   const id = `msg_${++msgN}`
   out({ type: 'stream_event', event: { type: 'message_start', message: { id } } })
   for (const chunk of text.match(/.{1,12}/gs)) out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: chunk } } })
-  out({ type: 'assistant', message: { id, role: 'assistant', content: [{ type: 'text', text }] }, parent_tool_use_id: null, session_id: sessionId })
+  contextTokens += 70000
+  out({ type: 'assistant', message: { id, role: 'assistant', content: [{ type: 'text', text }], usage: { input_tokens: 2, cache_creation_input_tokens: 1000, cache_read_input_tokens: contextTokens, output_tokens: 5 } }, parent_tool_use_id: null, session_id: sessionId })
 }
 function toolUse(name, input) {
   const id = 'toolu_' + crypto.randomBytes(6).toString('hex')
@@ -55,7 +68,7 @@ function toolResult(id, content, isError = false) {
 async function turn(text) {
   interrupted = false
   const started = Date.now()
-  out({ type: 'system', subtype: 'init', session_id: sessionId, cwd, model: 'mock-model', tools: ['Read', 'Edit', 'Bash'] })
+  out({ type: 'system', subtype: 'init', session_id: sessionId, cwd, model: 'mock-model', tools: ['Read', 'Edit', 'Bash'], mcp_servers: mcpServers() })
   if (text.includes('login-fail')) {
     out({ type: 'result', subtype: 'success', is_error: true, result: 'Invalid API key · Please run /login', session_id: sessionId, permission_denials: [] })
     return
@@ -111,6 +124,7 @@ function finish(started, ok) {
     duration_ms: Date.now() - started,
     num_turns: 4,
     total_cost_usd: 0.0123,
+    modelUsage: { 'mock-model': { contextWindow: 200000 } },
     session_id: sessionId,
     permission_denials: []
   })

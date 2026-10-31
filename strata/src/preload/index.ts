@@ -36,7 +36,8 @@ const api: StrataAPI = {
     remove: (id) => invoke('projects:remove', id),
     update: (id, patch) => invoke('projects:update', id, patch),
     touch: (id) => invoke('projects:touch', id),
-    info: (path) => invoke('projects:info', path)
+    info: (path) => invoke('projects:info', path),
+    mcpServers: (path) => invoke('projects:mcpServers', path)
   },
 
   tools: {

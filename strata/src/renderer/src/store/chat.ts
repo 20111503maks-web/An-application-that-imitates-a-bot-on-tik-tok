@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ClaudeEvent, ClaudeLogLine, HistoryItem, PendingChange, PermissionMode, PermissionRequest, Project } from '@shared/types'
+import type { ClaudeEvent, ClaudeLogLine, McpServerStatus, HistoryItem, PendingChange, PermissionMode, PermissionRequest, Project } from '@shared/types'
 import { useApp } from './app'
 import { toast } from './toast'
 
@@ -31,6 +31,10 @@ export interface ChatState {
   log: ClaudeLogLine[]
   mode?: PermissionMode
   modelOverride?: string
+  /** Size of the last prompt sent to the model (tokens) and the model's context window. */
+  contextTokens?: number
+  contextWindow?: number
+  mcp: McpServerStatus[]
 }
 
 const emptyChat = (): ChatState => ({
@@ -40,7 +44,10 @@ const emptyChat = (): ChatState => ({
   changes: [],
   authRequired: false,
   historyLoaded: false,
-  log: []
+  log: [],
+  mcp: [],
+  // Explicit undefined: patch() merges state, so a reset must overwrite the old value.
+  contextTokens: undefined
 })
 
 const EMPTY = emptyChat()
@@ -136,6 +143,7 @@ export const useChat = create<ChatStore>((set, get) => {
       sessionId: chat.sessionId ?? fresh.sessionId,
       model: chat.modelOverride ?? settings?.model ?? '',
       effort: settings?.effort ?? '',
+      disabledMcp: fresh.disabledMcp ?? [],
       permissionMode: chat.mode ?? settings?.permissionMode ?? 'acceptEdits',
       allowedTools: [...(fresh.allowedTools ?? []), ...extraRules]
     })
@@ -179,7 +187,7 @@ export const useChat = create<ChatStore>((set, get) => {
     async newSession(project) {
       await window.strata.claude.stop(project.id)
       await useApp.getState().updateProject(project.id, { sessionId: undefined })
-      patch(project.id, (c) => ({ ...emptyChat(), changes: c.changes, historyLoaded: true, mode: c.mode, modelOverride: c.modelOverride, log: c.log }))
+      patch(project.id, (c) => ({ ...emptyChat(), changes: c.changes, historyLoaded: true, mode: c.mode, modelOverride: c.modelOverride, log: c.log, contextWindow: c.contextWindow }))
     },
 
     async resumeSession(project, sessionId) {
@@ -192,6 +200,7 @@ export const useChat = create<ChatStore>((set, get) => {
         mode: c.mode,
         modelOverride: c.modelOverride,
         log: c.log,
+        contextWindow: c.contextWindow,
         sessionId,
         historyLoaded: true,
         items: [...fromHistory(history), { type: 'notice', id: uid('n'), text: 'Session resumed — new messages continue this conversation' }]
@@ -278,7 +287,9 @@ export const useChat = create<ChatStore>((set, get) => {
             if (e.state === 'stopped') return { status: 'stopped', busy: false, items: items.map(endStreaming) }
             return { status: 'idle' }
           case 'session':
-            return { sessionId: e.sessionId, model: e.model, status: 'busy' }
+            return { sessionId: e.sessionId, model: e.model, status: 'busy', mcp: e.mcp ?? c.mcp }
+          case 'usage':
+            return { contextTokens: e.contextTokens }
           case 'summary':
             return { summary: e.text }
           case 'text-delta':
@@ -329,7 +340,7 @@ export const useChat = create<ChatStore>((set, get) => {
             if (denials.length) next.push({ type: 'denials', id: uid('d'), denials })
             if (!e.success && e.error) next.push({ type: 'error', id: uid('e'), text: e.error })
             next.push({ type: 'result', id: uid('r'), success: e.success, costUsd: e.costUsd, durationMs: e.durationMs, changedFiles: e.changedFiles, error: e.error })
-            return { items: next, busy: false, status: 'idle', summary: undefined }
+            return { items: next, busy: false, status: 'idle', summary: undefined, contextWindow: e.contextWindow ?? c.contextWindow }
           }
           case 'auth-required':
             if (items.some((i) => i.type === 'auth')) return { authRequired: true }
@@ -393,4 +404,28 @@ export function wireChatEvents(): void {
     }
   })
   window.strata.claude.onLog((line) => useChat.getState().appendLog(line))
+}
+
+export interface ContextLevel {
+  tokens: number
+  window: number
+  /** 0..1 share of the model's context window. */
+  ratio: number
+  level: 'ok' | 'long' | 'full'
+}
+
+/** How full the conversation is, so the UI can suggest starting a new session. */
+export function contextOf(chat: ChatState): ContextLevel | null {
+  if (!chat.contextTokens) return null
+  // Until the first result tells us the real window, assume the common 200K.
+  const window = chat.contextWindow ?? 200_000
+  const ratio = Math.min(1, chat.contextTokens / window)
+  const level = ratio >= 0.85 ? 'full' : ratio >= 0.6 || chat.contextTokens >= 200_000 ? 'long' : 'ok'
+  return { tokens: chat.contextTokens, window, ratio, level }
+}
+
+export function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
+  if (n >= 1000) return `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}K`
+  return String(n)
 }

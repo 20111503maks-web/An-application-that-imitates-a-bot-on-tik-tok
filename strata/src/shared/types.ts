@@ -17,6 +17,8 @@ export interface Project {
   /** Tool permission rules the user granted "always" for this project. */
   allowedTools?: string[]
   pinned?: boolean
+  /** Names of MCP servers switched off for this project only. */
+  disabledMcp?: string[]
 }
 
 export type ThemeName = 'dark' | 'midnight' | 'light'
@@ -91,6 +93,19 @@ export interface ClaudeAuth {
   method?: string
   provider?: string
   error?: string
+}
+
+export interface McpServerInfo {
+  name: string
+  source: 'user' | 'project' | 'local'
+  type: 'stdio' | 'http' | 'sse'
+  /** Command line or URL (without query string) — never includes secrets. */
+  summary: string
+}
+
+export interface McpServerStatus {
+  name: string
+  status: string
 }
 
 export interface ToolsReport {
@@ -192,7 +207,8 @@ export interface PendingChange {
 /** Normalised events emitted by the Claude process manager to the renderer. */
 export type ClaudeEvent =
   | { kind: 'status'; state: 'starting' | 'ready' | 'busy' | 'idle' | 'stopped' }
-  | { kind: 'session'; sessionId: string; model?: string; cwd?: string; tools?: string[] }
+  | { kind: 'session'; sessionId: string; model?: string; cwd?: string; tools?: string[]; mcp?: McpServerStatus[] }
+  | { kind: 'usage'; contextTokens: number }
   | { kind: 'text-delta'; messageId: string; text: string }
   | { kind: 'thinking-delta'; messageId: string; text: string }
   | { kind: 'assistant-text'; messageId: string; blockIndex: number; text: string }
@@ -210,6 +226,7 @@ export type ClaudeEvent =
       costUsd?: number
       durationMs?: number
       numTurns?: number
+      contextWindow?: number
       error?: string
       denials: { toolName: string; input: Record<string, unknown> }[]
       changedFiles: string[]
@@ -239,6 +256,8 @@ export interface SendMessageOptions {
   effort?: EffortLevel
   permissionMode?: PermissionMode
   allowedTools?: string[]
+  /** MCP servers to leave out for this project. */
+  disabledMcp?: string[]
 }
 
 export interface SessionSummary {

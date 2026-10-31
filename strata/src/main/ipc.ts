@@ -8,6 +8,7 @@ import { findOnPath, launchDetached } from './exec'
 import * as fsm from './filesystem'
 import * as git from './git'
 import { assertAllowed } from './paths'
+import { listMcpServers } from './mcp'
 import * as projects from './projects'
 import { listSessions, loadHistory } from './sessions'
 import { getSettings, updateSettings } from './settings'
@@ -83,6 +84,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): ClaudeManage
     updateSettings({ lastProjectId: id })
   })
   handle('projects:info', (path: string) => projects.detectProject(assertAllowed(path)))
+  handle('projects:mcpServers', (path: string) => listMcpServers(assertAllowed(path)))
 
   // ---------------------------------------------------------------- tools
   handle('tools:detect', (force?: boolean) => detectTools(!!force))

@@ -31,6 +31,7 @@ w('src/ReplicatedStorage/Shop.lua', 'local Shop = {}\n\nShop.Sword = {\n\tname =
 w('src/ServerScriptService/Main.server.lua', 'local Shop = require(game.ReplicatedStorage.Shop)\nprint("Box Breakers server started")\n')
 w('src/StarterGui/ShopUI.client.lua', '-- Shop UI\nlocal Players = game:GetService("Players")\n')
 w('models/Sword.blend', Buffer.from([0x42, 0x4c, 0x45, 0x4e, 0x44, 0x45, 0x52, 0, 1, 2, 3]))
+w('.mcp.json', JSON.stringify({ mcpServers: { blender: { command: 'node', args: ['-e', ''] }, 'roblox-studio': { command: 'node', args: ['-e', ''] } } }))
 w('README.md', '# Box Breakers\n\nA Roblox game.\n')
 w('aftman.toml', '[tools]\nrojo = "rojo-rbx/rojo@7.4.0"\n')
 execSync('git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm init', { cwd: project })
@@ -123,6 +124,15 @@ const check = (cond, msg) => {
   check((await page.locator('.tool-row').count()) >= 4, 'tool steps rendered')
   check((await page.textContent('.segment:has-text("Changes")')).includes('2'), 'changes badge shows 2')
 
+  // Context meter + long-chat banner (the mock reports ~71K of a 200K window per message)
+  await page.waitForSelector('.ctx-meter', { timeout: 5000 })
+  const meter = await page.textContent('.ctx-meter')
+  check(/\d+(\.\d+)?K · \d+%/.test(meter), `context meter shows usage: ${meter}`)
+  await page.click('.composer textarea')
+  await page.keyboard.type('/cl')
+  check((await page.textContent('.mention-pop')).includes('/clear'), 'typing "/" suggests the /clear command')
+  await page.fill('.composer textarea', '')
+
   // 4. Review diff, reject one change, accept the other
   await page.click('.changed-file:has-text("Shop.lua") >> nth=0')
   await page.waitForSelector('.monaco-diff-editor', { timeout: 20000 })
@@ -176,6 +186,12 @@ const check = (cond, msg) => {
   await page.click('.segment:has-text("Tools")')
   await page.waitForSelector('.tools-panel .tool-card')
   await shot('11-tools')
+  // MCP servers: switch one off for this project
+  await page.waitForSelector('.mcp-row')
+  check((await page.locator('.mcp-row').count()) === 2, 'MCP card lists the 2 servers from .mcp.json')
+  await page.click('.mcp-row:has-text("roblox-studio") .toggle')
+  await page.waitForTimeout(400)
+  check((await page.locator('.mcp-row.is-off').count()) === 1, 'roblox-studio switched off')
 
   // 9. Explorer: create a file via context menu
   await page.click('.segment:has-text("Files")')
@@ -208,6 +224,15 @@ const check = (cond, msg) => {
   await page.keyboard.press('Enter')
   await page.waitForSelector('.auth-card', { timeout: 15000 })
   check(true, 'auth-required card appears when Claude Code is not logged in')
+  const claudeLog = await page.evaluate(() => window.strata.claude.log('p1'))
+  check(claudeLog.some((l) => l.dir === 'info' && l.line.includes('--strict-mcp-config')), 'CLI restarted with --strict-mcp-config after switching a server off')
+  const mcpFile = JSON.parse(fs.readFileSync(path.join(userData, 'mcp', 'p1.json'), 'utf8'))
+  check(JSON.stringify(Object.keys(mcpFile.mcpServers)) === '["blender"]', 'generated MCP config contains only the enabled server')
+  // /clear starts a fresh chat
+  await page.fill('.composer textarea', '/clear')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.chat-empty', { timeout: 5000 })
+  check((await page.locator('.ctx-meter').count()) === 0, '/clear starts a new chat and resets the context meter')
   await shot('14-auth')
 
   // 12. Remove project from list (files must stay)

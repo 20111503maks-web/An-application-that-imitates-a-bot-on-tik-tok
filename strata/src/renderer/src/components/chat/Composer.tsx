@@ -1,10 +1,10 @@
-import { ArrowUp, AtSign, Cpu, FileEdit, Map as MapIcon, ShieldCheck, ShieldOff, Square } from 'lucide-react'
+import { ArrowUp, AtSign, MessageSquarePlus, Cpu, FileEdit, Map as MapIcon, ShieldCheck, ShieldOff, Square } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { DirEntry, PermissionMode, Project } from '@shared/types'
 import { FileIcon, FolderIcon } from '@/lib/fileIcons'
 import { join } from '@/lib/path'
 import { useApp } from '@/store/app'
-import { useChat } from '@/store/chat'
+import { contextOf, formatTokens, useChat } from '@/store/chat'
 import { Select, type SelectOption } from '../ui/Select'
 
 const MODES: SelectOption<PermissionMode>[] = [
@@ -20,6 +20,28 @@ const MODELS: SelectOption<string>[] = [
   { value: 'sonnet', label: 'Sonnet', description: 'Fast and capable' },
   { value: 'haiku', label: 'Haiku', description: 'Fastest' }
 ]
+
+const SLASH_COMMANDS = [
+  { name: '/clear', desc: 'Start a new chat with an empty context' },
+  { name: '/new', desc: 'Same as /clear' }
+]
+
+function ContextMeter({ projectId }: { projectId: string }): JSX.Element | null {
+  const chat = useChat((s) => s.chats[projectId])
+  const ctx = chat ? contextOf(chat) : null
+  if (!ctx) return null
+  const pct = Math.max(1, Math.round(ctx.ratio * 100))
+  return (
+    <span
+      className={`ctx-meter is-${ctx.level}`}
+      data-tip={`Context: ${ctx.tokens.toLocaleString()} of ${ctx.window.toLocaleString()} tokens. Type /clear for a fresh chat.`}
+      data-tip-side="top"
+    >
+      <span className="ctx-ring" style={{ ['--p' as string]: `${pct}%` }} />
+      {formatTokens(ctx.tokens)} · {pct}%
+    </span>
+  )
+}
 
 interface Mention {
   start: number
@@ -38,7 +60,8 @@ export function Composer({ project, visible }: { project: Project; visible: bool
   const chatModel = useChat((s) => s.chats[project.id]?.modelOverride)
   const settings = useApp((s) => s.settings)
   const insert = useApp((s) => s.composerInsert)
-  const { send, interrupt, setMode, setModel } = useChat.getState()
+  const { send, interrupt, setMode, setModel, newSession } = useChat.getState()
+  const ctxLevel = useChat((s) => { const c = s.chats[project.id]; return c ? contextOf(c)?.level : undefined })
   const mode = chatMode ?? settings?.permissionMode ?? 'acceptEdits'
   const model = chatModel ?? settings?.model ?? ''
 
@@ -109,8 +132,17 @@ export function Composer({ project, visible }: { project: Project; visible: bool
     })
   }
 
+  const isSlash = text.startsWith('/') && !/\s/.test(text)
+  const slashMatches = isSlash ? SLASH_COMMANDS.filter((c) => c.name.startsWith(text.toLowerCase())) : []
+
   const submit = (): void => {
     if (busy || !text.trim()) return
+    const cmd = text.trim().toLowerCase()
+    if (cmd === '/clear' || cmd === '/new') {
+      newSession(project)
+      setText('')
+      return
+    }
     send(project, text)
     setText('')
     setMention(null)
@@ -147,7 +179,34 @@ export function Composer({ project, visible }: { project: Project; visible: bool
 
   return (
     <div className="composer-wrap">
+      {!busy && (ctxLevel === 'long' || ctxLevel === 'full') && (
+        <div className={`ctx-banner is-${ctxLevel}`}>
+          <span>{ctxLevel === 'full' ? 'Context is almost full — start a new chat so Claude keeps its focus.' : 'This chat is getting long. A new chat is cheaper and keeps answers sharp.'}</span>
+          <button onClick={() => newSession(project)}>
+            <MessageSquarePlus size={13} /> New chat
+          </button>
+        </div>
+      )}
       <div className={`composer ${busy ? 'is-busy' : ''} mode-${mode}`}>
+        {!mention && slashMatches.length > 0 && (
+          <div className="mention-pop">
+            <div className="mention-head">Commands</div>
+            {slashMatches.map((c) => (
+              <button
+                key={c.name}
+                className="mention-item"
+                onMouseDown={(ev) => {
+                  ev.preventDefault()
+                  setText(c.name)
+                  ref.current?.focus()
+                }}
+              >
+                <span className="mono">{c.name}</span>
+                <span className="muted">{c.desc}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {mention && (
           <div className="mention-pop">
             <div className="mention-head">Files in {mention.dir || project.name}</div>
@@ -199,6 +258,7 @@ export function Composer({ project, visible }: { project: Project; visible: bool
             <Select compact side="top" value={model} options={MODELS} onChange={(v) => setModel(project.id, v)} prefix={<Cpu size={12} />} />
           </div>
           <div className="composer-right">
+            <ContextMeter projectId={project.id} />
             <span className="composer-hint">
               <kbd className="kbd">↵</kbd> send <kbd className="kbd">⇧↵</kbd> newline
             </span>

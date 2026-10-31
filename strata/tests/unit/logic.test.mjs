@@ -149,3 +149,30 @@ test('paths: access is limited to project roots', async () => {
   assert.throws(() => assertAllowed('/etc/passwd'), /outside of your projects/)
   assert.throws(() => assertAllowed('/projects/game/../secret'), /outside/)
 })
+
+test('MCP servers are discovered per scope and can be left out for one project', async () => {
+  const { listMcpServers, writeMcpConfig } = await load('src/main/mcp.ts')
+  const cfgDir = join(tmp, 'claude-config')
+  const proj = join(tmp, 'McpProj')
+  mkdirSync(cfgDir, { recursive: true })
+  mkdirSync(proj, { recursive: true })
+  process.env.CLAUDE_CONFIG_DIR = cfgDir
+  writeFileSync(
+    join(cfgDir, '.claude.json'),
+    JSON.stringify({
+      mcpServers: { blender: { command: 'uvx', args: ['blender-mcp'] } },
+      projects: { [proj]: { mcpServers: { local1: { type: 'http', url: 'https://x.dev/mcp?token=SECRET' } } } }
+    })
+  )
+  writeFileSync(join(proj, '.mcp.json'), JSON.stringify({ mcpServers: { 'roblox-studio': { command: 'node', args: ['studio.js'], env: { KEY: 'SECRET' } } } }))
+  const list = listMcpServers(proj)
+  assert.deepEqual(list.map((s) => [s.name, s.source]), [['blender', 'user'], ['local1', 'local'], ['roblox-studio', 'project']])
+  assert.ok(!JSON.stringify(list).includes('SECRET'), 'secrets never leave the main process')
+
+  assert.equal(writeMcpConfig('p1', proj, []), null, 'nothing disabled → no flags')
+  const file = writeMcpConfig('p1', proj, ['roblox-studio'])
+  const written = JSON.parse(readFileSync(file, 'utf8'))
+  assert.deepEqual(Object.keys(written.mcpServers).sort(), ['blender', 'local1'])
+  assert.equal(written.mcpServers.local1.url, 'https://x.dev/mcp?token=SECRET', 'enabled servers are passed through unchanged')
+  delete process.env.CLAUDE_CONFIG_DIR
+})
