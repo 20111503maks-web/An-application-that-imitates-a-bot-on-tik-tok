@@ -1,0 +1,49 @@
+appId: dev.strata.ide
+productName: Strata
+copyright: Copyright © 2026 Strata
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - "!**/node_modules/node-pty/src/**"
+  - "!**/node_modules/node-pty/deps/**"
+  - "!**/node_modules/node-pty/third_party/**"
+  - "!**/node_modules/node-pty/prebuilds/*/*.pdb"
+  - "!**/node_modules/node-pty/prebuilds/*/conpty/*.pdb"
+asarUnpack:
+  - "**/node_modules/node-pty/**"
+# node-pty ships N-API prebuilds; never rebuild against Electron headers.
+# No auto-update feed (avoids electron-builder guessing a GitHub publish target).
+publish: []
+npmRebuild: false
+nodeGypRebuild: false
+win:
+  icon: build/icon.png
+  files:
+    # Windows uses node-pty's bundled N-API prebuilds; drop any locally compiled binary.
+    - "!**/node_modules/node-pty/build/**"
+    - "!**/node_modules/node-pty/prebuilds/darwin-*/**"
+  artifactName: Strata-${version}-win-${arch}.${ext}
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  # rcedit (exe icon/metadata) needs wine when building on Linux. The GitHub
+  # Actions Windows runner overrides this with -c.win.signAndEditExecutable=true.
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Strata
+  artifactName: Strata-Setup-${version}.${ext}
+mac:
+  target: dmg
+linux:
+  target: AppImage
+  category: Development

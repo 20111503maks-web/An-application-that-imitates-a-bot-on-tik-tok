@@ -1,0 +1,9 @@
+node_modules/
+out/
+release/
+release-linux/
+tests/e2e/screenshots/
+*.log
+
+# build/ holds app icons (the repo root ignores Gradle build/ folders)
+!build/

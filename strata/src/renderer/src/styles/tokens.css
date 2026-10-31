@@ -1,0 +1,94 @@
+/* Design tokens. Themes only swap these variables. */
+
+:root,
+[data-theme='dark'] {
+  --bg-0: #0b0c0e;
+  --bg-1: #0f1013;
+  --bg-2: #141519;
+  --bg-3: #1a1b20;
+  --bg-4: #212228;
+  --bg-5: #2a2b32;
+  --overlay: rgba(6, 7, 9, 0.62);
+  --border: rgba(255, 255, 255, 0.065);
+  --border-2: rgba(255, 255, 255, 0.1);
+  --border-3: rgba(255, 255, 255, 0.16);
+  --text-0: #ececee;
+  --text-1: #b9bac1;
+  --text-2: #83848c;
+  --text-3: #5b5c64;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 24px -6px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 24px 64px -12px rgba(0, 0, 0, 0.7), 0 4px 16px rgba(0, 0, 0, 0.4);
+  --green: #3ecf8e;
+  --red: #f0616d;
+  --yellow: #e5b454;
+  --blue: #6aa8ff;
+  --purple: #b18cff;
+  --cyan: #4fd1d9;
+  --code-bg: #0c0d10;
+  --selection: rgba(106, 168, 255, 0.22);
+  color-scheme: dark;
+}
+
+[data-theme='midnight'] {
+  --bg-0: #050608;
+  --bg-1: #08090c;
+  --bg-2: #0c0d11;
+  --bg-3: #121318;
+  --bg-4: #181a20;
+  --bg-5: #20222a;
+  --overlay: rgba(0, 0, 0, 0.7);
+  --border: rgba(255, 255, 255, 0.055);
+  --border-2: rgba(255, 255, 255, 0.09);
+  --border-3: rgba(255, 255, 255, 0.14);
+  --code-bg: #060709;
+}
+
+[data-theme='light'] {
+  --bg-0: #f3f3f5;
+  --bg-1: #f8f8fa;
+  --bg-2: #ffffff;
+  --bg-3: #f0f0f3;
+  --bg-4: #e8e8ec;
+  --bg-5: #dedee4;
+  --overlay: rgba(20, 20, 28, 0.28);
+  --border: rgba(16, 16, 24, 0.08);
+  --border-2: rgba(16, 16, 24, 0.12);
+  --border-3: rgba(16, 16, 24, 0.2);
+  --text-0: #17171c;
+  --text-1: #44454d;
+  --text-2: #6e6f78;
+  --text-3: #9a9ba3;
+  --shadow-1: 0 1px 2px rgba(16, 16, 24, 0.06);
+  --shadow-2: 0 8px 24px -6px rgba(16, 16, 24, 0.14), 0 2px 6px rgba(16, 16, 24, 0.06);
+  --shadow-3: 0 24px 64px -12px rgba(16, 16, 24, 0.22), 0 4px 16px rgba(16, 16, 24, 0.08);
+  --green: #1a9f62;
+  --red: #d63a49;
+  --yellow: #b7861b;
+  --blue: #2f6fe0;
+  --purple: #7b54e0;
+  --cyan: #1597a0;
+  --code-bg: #f6f6f8;
+  --selection: rgba(47, 111, 224, 0.16);
+  color-scheme: light;
+}
+
+:root {
+  --accent: #d97757;
+  --accent-fg: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 42%, transparent);
+  --font-ui: 'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'Cascadia Code', Consolas, ui-monospace, monospace;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --titlebar-h: 40px;
+  --statusbar-h: 24px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 120ms;
+  --t-med: 200ms;
+}

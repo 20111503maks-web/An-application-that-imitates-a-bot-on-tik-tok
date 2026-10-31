@@ -1,0 +1,93 @@
+name: Strata
+
+on:
+  push:
+    paths:
+      - 'strata/**'
+      - '.github/workflows/strata.yml'
+    tags:
+      - 'strata-v*'
+  pull_request:
+    paths:
+      - 'strata/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: strata
+
+jobs:
+  windows:
+    name: Windows build + e2e
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: strata/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package (NSIS installer + portable zip)
+        run: npx electron-builder --win --x64 --publish never -c.win.signAndEditExecutable=true
+
+      - name: End-to-end test of the packaged Strata.exe
+        env:
+          STRATA_EXE: release/win-unpacked/Strata.exe
+        run: node tests/e2e/run.cjs
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Strata-Windows
+          path: |
+            strata/release/*.exe
+            strata/release/*.zip
+          if-no-files-found: error
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots-windows
+          path: strata/tests/e2e/screenshots/
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/strata-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            strata/release/*.exe
+            strata/release/*.zip
+
+  linux:
+    name: Linux checks + e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: strata/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: End-to-end test (Electron under Xvfb)
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e/run.cjs
