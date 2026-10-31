@@ -1,6 +1,6 @@
 import { Box, Code2, FolderKanban, Gamepad2, GitBranch, Palette, RefreshCw, Settings2, Sparkles, SquareTerminal, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
-import type { PermissionMode, Settings, ThemeName, ToolId } from '@shared/types'
+import type { EffortLevel, PermissionMode, Settings, ThemeName, ToolId } from '@shared/types'
 import { tildify } from '@/lib/path'
 import { timeAgo } from '@/lib/tools'
 import { useApp, type SettingsSection } from '@/store/app'
@@ -218,6 +218,21 @@ function Section({ id }: { id: SettingsSection }): JSX.Element | null {
                   { value: 'haiku', label: 'Haiku' }
                 ]}
                 onChange={(v) => set({ model: v })}
+              />
+            </Row>
+            <Row label="Effort" hint="How much thinking Claude spends per reply. Passed as --effort; empty uses Claude Code's default. Applies to new processes.">
+              <Select<EffortLevel>
+                value={s.effort}
+                width={200}
+                options={[
+                  { value: '', label: 'Default' },
+                  { value: 'low', label: 'Low', description: 'Fastest, least thinking' },
+                  { value: 'medium', label: 'Medium' },
+                  { value: 'high', label: 'High' },
+                  { value: 'xhigh', label: 'Extra high' },
+                  { value: 'max', label: 'Max', description: 'Most thinking, slowest' }
+                ]}
+                onChange={(v) => set({ effort: v })}
               />
             </Row>
             <Row label="Stream responses" hint="Show Claude’s text as it is being written.">

@@ -109,10 +109,11 @@ class ClaudeSession {
   send(opts: SendMessageOptions): void {
     const mode = opts.permissionMode ?? 'acceptEdits'
     const model = opts.model ?? ''
+    const effort = opts.effort ?? ''
     this.allowedRules = [...(opts.allowedTools ?? [])]
     this.permissionMode = mode
     // Process-level options. If they change, restart the CLI and resume the session.
-    const config = JSON.stringify({ mode: mode === 'plan' || mode === 'bypassPermissions' ? mode : 'host', model, rules: this.allowedRules })
+    const config = JSON.stringify({ mode: mode === 'plan' || mode === 'bypassPermissions' ? mode : 'host', model, effort, rules: this.allowedRules })
     if (opts.sessionId && opts.sessionId !== this.sessionId) {
       this.shutdown()
       this.sessionId = opts.sessionId
@@ -139,13 +140,13 @@ class ClaudeSession {
     if (!this.running) {
       this.config = config
       this.queue = [line]
-      this.spawn(model, mode)
+      this.spawn(model, effort, mode)
     } else {
       this.write(line)
     }
   }
 
-  private spawn(model: string, mode: PermissionMode): void {
+  private spawn(model: string, effort: string, mode: PermissionMode): void {
     const exe = claudePath()
     if (!exe) {
       this.busy = false
@@ -159,6 +160,7 @@ class ClaudeSession {
     // Structured questions need a richer UI than a permission card; let Claude ask in plain text.
     args.push('--disallowedTools', 'AskUserQuestion')
     if (model) args.push('--model', model)
+    if (effort) args.push('--effort', effort)
     if (mode === 'plan') args.push('--permission-mode', 'plan')
     if (mode === 'bypassPermissions') args.push('--dangerously-skip-permissions')
     if (this.sessionId) args.push('--resume', this.sessionId)
@@ -452,7 +454,8 @@ class ClaudeSession {
     if (!line) return
     this.log('info', 'retrying with compatibility flags')
     this.queue = [line]
-    this.spawn(JSON.parse(this.config).model, this.permissionMode)
+    const saved = JSON.parse(this.config)
+    this.spawn(saved.model, saved.effort ?? '', this.permissionMode)
   }
 
   private touchIdle(): void {

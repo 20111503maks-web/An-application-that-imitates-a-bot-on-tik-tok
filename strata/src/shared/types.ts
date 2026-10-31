@@ -2,6 +2,10 @@
 
 export type PermissionMode = 'ask' | 'acceptEdits' | 'plan' | 'bypassPermissions'
 
+/** Passed to Claude Code as --effort. Empty string = Claude Code's own default. */
+export type EffortLevel = '' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export const EFFORT_LEVELS: EffortLevel[] = ['', 'low', 'medium', 'high', 'xhigh', 'max']
+
 export interface Project {
   id: string
   name: string
@@ -25,6 +29,7 @@ export interface Settings {
   gitPath: string
   shell: string
   model: string
+  effort: EffortLevel
   permissionMode: PermissionMode
   streamPartialMessages: boolean
   theme: ThemeName
@@ -50,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gitPath: '',
   shell: '',
   model: '',
+  effort: '',
   permissionMode: 'acceptEdits',
   streamPartialMessages: true,
   theme: 'dark',
@@ -230,6 +236,7 @@ export interface SendMessageOptions {
   text: string
   sessionId?: string
   model?: string
+  effort?: EffortLevel
   permissionMode?: PermissionMode
   allowedTools?: string[]
 }

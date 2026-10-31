@@ -135,6 +135,7 @@ export const useChat = create<ChatStore>((set, get) => {
       text,
       sessionId: chat.sessionId ?? fresh.sessionId,
       model: chat.modelOverride ?? settings?.model ?? '',
+      effort: settings?.effort ?? '',
       permissionMode: chat.mode ?? settings?.permissionMode ?? 'acceptEdits',
       allowedTools: [...(fresh.allowedTools ?? []), ...extraRules]
     })
